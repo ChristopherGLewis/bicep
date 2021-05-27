@@ -76,27 +76,27 @@ namespace Bicep.Core.Analyzers.Linter.Rules
             {
                 if (GetCodeReplacement(functionCallSyntax) is CodeReplacement cr)
                 {
-                    return new CodeFix($"Use string interpolation: {cr.Text}", true, cr); // TODO: localize
+                    return new CodeFix(string.Format(CoreResources.UseStringInterpolationMessageFormat, cr.Text), true, cr);
                 }
                 return null;
             }
 
             private CodeReplacement? GetCodeReplacement(FunctionCallSyntax functionCallSyntax)
             {
-                if (RewriteConcatToInterpolate(functionCallSyntax) is StringSyntax newSyntax)
+                if (RewriteConcatToInterpolate(functionCallSyntax) is ExpressionSyntax newSyntax)
                 {
                     return CodeReplacement.FromSyntax(functionCallSyntax.Span, newSyntax);
                 }
                 return null;
             }
 
-            private StringSyntax? RewriteConcatToInterpolate(FunctionCallSyntax func)
+            private ExpressionSyntax? RewriteConcatToInterpolate(FunctionCallSyntax func)
             {
-                var rewrite = CallbackConvertorRewriter<FunctionCallSyntax, StringSyntax>.Rewrite(func, RewriteConcatCallback);
+                var rewrite = CallbackConvertorRewriter<FunctionCallSyntax, ExpressionSyntax>.Rewrite(func, RewriteConcatCallback);
                 return rewrite;
             }
 
-            private StringSyntax RewriteConcatCallback(FunctionCallSyntax syntax)
+            private ExpressionSyntax RewriteConcatCallback(FunctionCallSyntax syntax)
             {
                 var tokens = new List<Token>();
                 var expressions = new List<SyntaxBase>();
@@ -107,9 +107,9 @@ namespace Bicep.Core.Analyzers.Linter.Rules
                 {
                     return CreateStringInterpolation(concatSyntax.Arguments.Select(a => a.Expression).ToImmutableArray());
                 }
-                else if (flattened is StringSyntax stringSyntax)
+                else if (flattened is ExpressionSyntax expressionSyntax)
                 {
-                    return stringSyntax;
+                    return expressionSyntax;
                 }
 
                 // TODO:  What is the correct way to handle a failed codefix?
@@ -130,10 +130,17 @@ namespace Bicep.Core.Analyzers.Linter.Rules
                 SyntaxBase? prevArg = default;
                 var argList = argExpressions.Select((arg, i) => new { arg = arg, argindex = i });
 
-                void addStringSyntax(StringSyntax stringSyntax)
+                void addSyntax(ExpressionSyntax expressionSyntax)
                 {
-                    expressions.AddRange(stringSyntax.Expressions);
-                    segments.AddRange(stringSyntax.SegmentValues);
+                    if (expressionSyntax is StringSyntax stringSyntax)
+                    {
+                        expressions.AddRange(stringSyntax.Expressions);
+                        segments.AddRange(stringSyntax.SegmentValues);
+                    }
+                    else
+                    {
+                        expressions.Add(expressionSyntax);
+                    }
                 }
 
                 foreach (var argSet in argList)
@@ -141,14 +148,14 @@ namespace Bicep.Core.Analyzers.Linter.Rules
                     // if a string literal append
                     if (argSet.arg is StringSyntax stringSyntax)
                     {
-                        addStringSyntax(stringSyntax);
+                        addSyntax(stringSyntax);
                         prevArg = stringSyntax;
                     }
                     else if (argSet.arg is FunctionCallSyntax funcSyntax && funcSyntax.NameEquals(concatFunction))
                     {
-                        stringSyntax = RewriteConcatCallback(funcSyntax);
-                        addStringSyntax(stringSyntax);
-                        prevArg = stringSyntax;
+                        var expressionSyntax = RewriteConcatCallback(funcSyntax);
+                        addSyntax(expressionSyntax);
+                        prevArg = expressionSyntax;
                     }
                     // otherwise: some other function, variable, other embedded
                     else

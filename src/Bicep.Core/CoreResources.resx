@@ -156,4 +156,8 @@
   <data name="UnusedVariableRuleDescription" xml:space="preserve">
     <value>Variable is declared but never used.</value>
   </data>
+  <data name="UseStringInterpolationMessageFormat" xml:space="preserve">
+    <value>Use string interpolation: {0}</value>
+    <comment>{0} is text of the replacement for fix</comment>
+  </data>
 </root>
